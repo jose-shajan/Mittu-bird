@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flappy Bird</title>
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #70c5ce;
+      height: 100vh;
+    }
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="288" height="512"></canvas>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    let frames = 0;
+    let score = 0;
+    let highScore = localStorage.getItem("flappyHighScore") || 0;
+    let running = true;
+
+    // Assets
+    const bg = new Image();
+    bg.src = "img/bg.png";
+
+    const ground = new Image();
+    ground.src = "img/ground.png";
+
+    const birdFrames = [new Image(), new Image(), new Image()];
+    birdFrames[0].src = "img/bird1.png";
+    birdFrames[1].src = "img/bird2.png";
+    birdFrames[2].src = "img/bird3.png";
+
+    const pipeTop = new Image();
+    pipeTop.src = "img/pipe.png";
+
+    const pipeBottom = new Image();
+    pipeBottom.src = "img/pipe.png";
+
+    const flapSound = new Audio("sounds/gawk.mp3");
+    const hitSound = new Audio("sounds/0919.MP3");
+    const pointSound = new Audio("sounds/gawk.mp3");
+
+    const groundHeight = 112; // adjust based on your ground image
+
+    // Wait for all assets to load
+    let assetsLoaded = 0;
+    const totalAssets = 9; // bg, ground, 3 birds, pipeTop, pipeBottom, 3 sounds
+
+    function assetLoaded() {
+      assetsLoaded++;
+      if (assetsLoaded === totalAssets) {
+        loop();
+      }
+    }
+
+    [bg, ground, pipeTop, pipeBottom, ...birdFrames].forEach(img => img.onload = assetLoaded);
+    [flapSound, hitSound, pointSound].forEach(audio => {
+      audio.oncanplaythrough = assetLoaded;
+    });
+
+    // Bird
+    const bird = {
+      x: 50,
+      y: 200, // start above ground
+      w: 34,
+      h: 24,
+      frame: 0,
+      velocity: 0,
+      gravity: 0.25,
+      jump: 4.6,
+      alive: false, // start inactive
+      draw() {
+        ctx.drawImage(birdFrames[this.frame], this.x, this.y);
+      },
+      flap() {
+        this.velocity = -this.jump;
+        this.alive = true;
+        try { flapSound.play(); } catch(e) {}
+      },
+      update() {
+        this.frame = (frames % 9) / 3 | 0;
+        this.velocity += this.gravity;
+        this.y += this.velocity;
+
+        if (!this.alive) return;
+
+        if (this.y + this.h >= canvas.height - groundHeight) {
+          this.y=canvas.height - groundHeight - this.h;
+          gameOver();
+        }
+        
+        if (this.y < 0) this.y = 0;
+      }
+    };
+
+    // Pipes
+    const pipes = [];
+    const pipeGap = 100;
+    const pipeWidth = 52;
+
+    function spawnPipe() {
+      const topY = -Math.random() * 100 - 50;
+      pipes.push({ x: canvas.width, y: topY });
+    }
+
+    function drawPipes() {
+      pipes.forEach(p => {
+        ctx.drawImage(pipeTop, p.x, p.y);
+        ctx.drawImage(pipeBottom, p.x, p.y + pipeTop.height + pipeGap);
+      });
+    }
+
+    function updatePipes() {
+      pipes.forEach((p) => {
+        p.x -= 2;
+
+        if (p.x + pipeWidth === bird.x && bird.alive) {
+          score++;
+          try { pointSound.play(); } catch(e) {}
+          if (score > highScore) {
+            highScore = score;
+            localStorage.setItem("flappyHighScore", highScore);
+          }
+        }
+
+        if (
+          bird.alive &&
+          bird.x + bird.w > p.x &&
+          bird.x < p.x + pipeWidth &&
+          (bird.y < p.y + pipeTop.height ||
+           bird.y + bird.h > p.y + pipeTop.height + pipeGap)
+        ) {
+          gameOver();
+        }
+      });
+
+      if (frames % 100 === 0) spawnPipe();
+    }
+
+    // Ground scrolling
+    let groundX = 0;
+    function drawGround() {
+      groundX = (groundX - 2) % (ground.width / 2);
+      ctx.drawImage(ground, groundX, canvas.height - ground.height);
+      ctx.drawImage(ground, groundX + ground.width, canvas.height - ground.height);
+    }
+
+    function gameOver() {
+      if (!running) return;
+      try { hitSound.play(); } catch(e) {}
+      running = false;
+      setTimeout(() => {
+        alert("Game Over! Score: " + score + " | High Score: " + highScore);
+        location.reload();
+      }, 100);
+    }
+
+    function loop() {
+      ctx.drawImage(bg, 0, 0);
+      bird.update();
+      bird.draw();
+      updatePipes();
+      drawPipes();
+      drawGround();
+
+      ctx.fillStyle = "white";
+      ctx.font = "20px Arial";
+      ctx.fillText("Score: " + score, 10, 25);
+      ctx.fillText("High: " + highScore, 10, 50);
+
+      frames++;
+      if (running) requestAnimationFrame(loop);
+    }
+
+    // Controls
+    document.addEventListener("keydown", e => {
+      if (e.code === "Space") bird.flap();
+    });
+    canvas.addEventListener("mousedown", () => bird.flap());
+    canvas.addEventListener("touchstart", () => bird.flap());
+  </script>
+</body>
+</html>
+
