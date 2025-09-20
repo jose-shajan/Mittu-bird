@@ -1,12 +1,14 @@
-body {
+body, html {
   margin: 0;
+  padding: 0;
+  overflow: hidden;
+  height: 100%;
+  width: 100%;
   background: #70c5ce;
+  font-family: Arial, sans-serif;
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 100vh;
-  overflow: hidden;
-  font-family: Arial, sans-serif;
 }
 
 canvas {
@@ -35,5 +37,3 @@ canvas {
   margin: 10px 0;
   font-size: 20px;
 }
-
-
