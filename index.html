@@ -1,196 +1,175 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Flappy Bird</title>
-  <style>
-    body {
-      margin: 0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      background: #70c5ce;
-      height: 100vh;
-    }
-    canvas {
-      display: block;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flappy Bird</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <canvas id="gameCanvas" width="288" height="512"></canvas>
+<canvas id="gameCanvas"></canvas>
+<div id="gameOverOverlay">
+  <p id="gameOverTitle">GAME OVER</p>
+  <p id="gameOverScore">Score: 0</p>
+  <p id="gameOverHigh">High Score: 0</p>
+  <p>Tap / Click to Restart</p>
+</div>
 
-  <script>
-    const canvas = document.getElementById("gameCanvas");
-    const ctx = canvas.getContext("2d");
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const overlay = document.getElementById("gameOverOverlay");
+const scoreText = document.getElementById("gameOverScore");
+const highText = document.getElementById("gameOverHigh");
 
-    let frames = 0;
-    let score = 0;
-    let highScore = localStorage.getItem("flappyHighScore") || 0;
-    let running = true;
+// Original resolution
+const GAME_WIDTH = 288;
+const GAME_HEIGHT = 512;
+canvas.width = GAME_WIDTH;
+canvas.height = GAME_HEIGHT;
 
-    // Assets
-    const bg = new Image();
-    bg.src = "img/bg.png";
+// Responsive scaling
+function resizeCanvas() {
+  const scale = Math.min(window.innerWidth / GAME_WIDTH, window.innerHeight / GAME_HEIGHT);
+  canvas.style.width = GAME_WIDTH * scale + "px";
+  canvas.style.height = GAME_HEIGHT * scale + "px";
+}
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
 
-    const ground = new Image();
-    ground.src = "img/ground.png";
+// Game variables
+let frames = 0;
+let score = 0;
+let highScore = localStorage.getItem("flappyHighScore") || 0;
+let running = true;
+const groundHeight = 112;
 
-    const birdFrames = [new Image(), new Image(), new Image()];
-    birdFrames[0].src = "img/bird1.png";
-    birdFrames[1].src = "img/bird2.png";
-    birdFrames[2].src = "img/bird3.png";
+// Assets
+const bg = new Image(); bg.src = "img/bg.png";
+const ground = new Image(); ground.src = "img/ground.png";
+const birdFrames = [new Image(), new Image(), new Image()];
+birdFrames[0].src = "img/bird1.png";
+birdFrames[1].src = "img/bird2.png";
+birdFrames[2].src = "img/bird3.png";
+const pipeTop = new Image(); pipeTop.src = "img/pipe.png";
+const pipeBottom = new Image(); pipeBottom.src = "img/pipe.png";
 
-    const pipeTop = new Image();
-    pipeTop.src = "img/pipe.png";
+// Sounds
+const flapSound = new Audio("sounds/gawk.mp3");
+const hitSound = new Audio("sounds/0919.MP3");
+const pointSound = new Audio("sounds/0919.MP3");
 
-    const pipeBottom = new Image();
-    pipeBottom.src = "img/pipe.png";
+// Wait for assets
+let assetsLoaded = 0;
+const totalAssets = 9;
+function assetLoaded() {
+  assetsLoaded++;
+  if (assetsLoaded === totalAssets) loop();
+}
+[bg, ground, pipeTop, pipeBottom, ...birdFrames].forEach(img => img.onload = assetLoaded);
+[flapSound, hitSound, pointSound].forEach(audio => audio.oncanplaythrough = assetLoaded);
 
-    const flapSound = new Audio("sounds/gawk.mp3");
-    const hitSound = new Audio("sounds/0919.MP3");
-    const pointSound = new Audio("sounds/gawk.mp3");
+// Bird
+const bird = {
+  x: 50, y: 200, w: 34, h: 24,
+  frame: 0, velocity: 0, gravity: 0.25, jump: 4.6, alive: false,
+  draw() { ctx.drawImage(birdFrames[this.frame], this.x, this.y); },
+  flap() { 
+    this.velocity = -this.jump; 
+    this.alive = true; 
+    try { flapSound.play(); } catch(e) {} 
+  },
+  update() {
+    this.frame = (frames % 9) / 3 | 0;
 
-    const groundHeight = 112; // adjust based on your ground image
+    if (!this.alive) return;
 
-    // Wait for all assets to load
-    let assetsLoaded = 0;
-    const totalAssets = 9; // bg, ground, 3 birds, pipeTop, pipeBottom, 3 sounds
+    this.velocity += this.gravity;
+    this.y += this.velocity;
 
-    function assetLoaded() {
-      assetsLoaded++;
-      if (assetsLoaded === totalAssets) {
-        loop();
-      }
+    // Floor collision
+    if (this.y + this.h >= canvas.height - groundHeight) {
+      this.y = canvas.height - groundHeight - this.h;
+      gameOver();
     }
 
-    [bg, ground, pipeTop, pipeBottom, ...birdFrames].forEach(img => img.onload = assetLoaded);
-    [flapSound, hitSound, pointSound].forEach(audio => {
-      audio.oncanplaythrough = assetLoaded;
-    });
+    // Ceiling collision
+    if (this.y < 0) this.y = 0;
+  }
+};
 
-    // Bird
-    const bird = {
-      x: 50,
-      y: 200, // start above ground
-      w: 34,
-      h: 24,
-      frame: 0,
-      velocity: 0,
-      gravity: 0.25,
-      jump: 4.6,
-      alive: false, // start inactive
-      draw() {
-        ctx.drawImage(birdFrames[this.frame], this.x, this.y);
-      },
-      flap() {
-        this.velocity = -this.jump;
-        this.alive = true;
-        try { flapSound.play(); } catch(e) {}
-      },
-      update() {
-        this.frame = (frames % 9) / 3 | 0;
-        this.velocity += this.gravity;
-        this.y += this.velocity;
+// Pipes
+const pipes = [];
+const pipeGap = 100;
+const pipeWidth = 52;
 
-        if (!this.alive) return;
+function spawnPipe() { pipes.push({ x: canvas.width, y: -Math.random() * 100 - 50 }); }
+function drawPipes() { pipes.forEach(p => { ctx.drawImage(pipeTop, p.x, p.y); ctx.drawImage(pipeBottom, p.x, p.y + pipeTop.height + pipeGap); }); }
+function updatePipes() {
+  if (!bird.alive) return; // pipes only move after first flap
 
-        if (this.y + this.h >= canvas.height - groundHeight) {
-          this.y=canvas.height - groundHeight - this.h;
-          gameOver();
-        }
-        
-        if (this.y < 0) this.y = 0;
-      }
-    };
+  pipes.forEach(p => {
+    p.x -= 2;
 
-    // Pipes
-    const pipes = [];
-    const pipeGap = 100;
-    const pipeWidth = 52;
-
-    function spawnPipe() {
-      const topY = -Math.random() * 100 - 50;
-      pipes.push({ x: canvas.width, y: topY });
+    if (p.x + pipeWidth === bird.x) {
+      score++; 
+      try { pointSound.play(); } catch(e) {}
+      if (score > highScore) { highScore = score; localStorage.setItem("flappyHighScore", highScore); }
     }
 
-    function drawPipes() {
-      pipes.forEach(p => {
-        ctx.drawImage(pipeTop, p.x, p.y);
-        ctx.drawImage(pipeBottom, p.x, p.y + pipeTop.height + pipeGap);
-      });
-    }
+    if (
+      bird.x + bird.w > p.x &&
+      bird.x < p.x + pipeWidth &&
+      (bird.y < p.y + pipeTop.height ||
+       bird.y + bird.h > p.y + pipeTop.height + pipeGap)
+    ) gameOver();
+  });
 
-    function updatePipes() {
-      pipes.forEach((p) => {
-        p.x -= 2;
+  if (frames % 100 === 0) spawnPipe();
+}
 
-        if (p.x + pipeWidth === bird.x && bird.alive) {
-          score++;
-          try { pointSound.play(); } catch(e) {}
-          if (score > highScore) {
-            highScore = score;
-            localStorage.setItem("flappyHighScore", highScore);
-          }
-        }
+// Ground
+let groundX = 0;
+function drawGround() {
+  groundX = (groundX - 2) % (ground.width / 2);
+  ctx.drawImage(ground, groundX, canvas.height - ground.height);
+  ctx.drawImage(ground, groundX + ground.width, canvas.height - ground.height);
+}
 
-        if (
-          bird.alive &&
-          bird.x + bird.w > p.x &&
-          bird.x < p.x + pipeWidth &&
-          (bird.y < p.y + pipeTop.height ||
-           bird.y + bird.h > p.y + pipeTop.height + pipeGap)
-        ) {
-          gameOver();
-        }
-      });
+// Game Over
+function gameOver() {
+  if (!running) return;
+  try { hitSound.play(); } catch(e) {}
+  running = false;
+  scoreText.textContent = "Score: " + score;
+  highText.textContent = "High Score: " + highScore;
+  overlay.style.visibility = "visible";
+}
 
-      if (frames % 100 === 0) spawnPipe();
-    }
+// Loop
+function loop() {
+  ctx.drawImage(bg, 0, 0);
+  bird.update(); bird.draw();
+  updatePipes(); drawPipes();
+  drawGround();
+  ctx.fillStyle = "white"; ctx.font = "20px Arial";
+  ctx.fillText("Score: " + score, 10, 25);
+  ctx.fillText("High: " + highScore, 10, 50);
+  if (running) { frames++; requestAnimationFrame(loop); }
+}
 
-    // Ground scrolling
-    let groundX = 0;
-    function drawGround() {
-      groundX = (groundX - 2) % (ground.width / 2);
-      ctx.drawImage(ground, groundX, canvas.height - ground.height);
-      ctx.drawImage(ground, groundX + ground.width, canvas.height - ground.height);
-    }
+// Controls
+document.addEventListener("keydown", e => { if (e.code === "Space") bird.flap(); });
+canvas.addEventListener("mousedown", () => { if (!running) location.reload(); else bird.flap(); });
+canvas.addEventListener("touchstart", () => { if (!running) location.reload(); else bird.flap(); });
 
-    function gameOver() {
-      if (!running) return;
-      try { hitSound.play(); } catch(e) {}
-      running = false;
-      setTimeout(() => {
-        alert("Game Over! Score: " + score + " | High Score: " + highScore);
-        location.reload();
-      }, 100);
-    }
-
-    function loop() {
-      ctx.drawImage(bg, 0, 0);
-      bird.update();
-      bird.draw();
-      updatePipes();
-      drawPipes();
-      drawGround();
-
-      ctx.fillStyle = "white";
-      ctx.font = "20px Arial";
-      ctx.fillText("Score: " + score, 10, 25);
-      ctx.fillText("High: " + highScore, 10, 50);
-
-      frames++;
-      if (running) requestAnimationFrame(loop);
-    }
-
-    // Controls
-    document.addEventListener("keydown", e => {
-      if (e.code === "Space") bird.flap();
-    });
-    canvas.addEventListener("mousedown", () => bird.flap());
-    canvas.addEventListener("touchstart", () => bird.flap());
-  </script>
+// Fullscreen once
+let fullscreenEnabled = false;
+function enableFullscreen() {
+  if (!fullscreenEnabled && canvas.requestFullscreen) { canvas.requestFullscreen().catch(() => {}); fullscreenEnabled = true; }
+}
+canvas.addEventListener("mousedown", enableFullscreen, { once: true });
+canvas.addEventListener("touchstart", enableFullscreen, { once: true });
+</script>
 </body>
 </html>
-
