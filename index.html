@@ -57,7 +57,7 @@ const pipeTop = new Image(); pipeTop.src = "img/pipe.png";
 const pipeBottom = new Image(); pipeBottom.src = "img/pipe.png";
 
 // Sounds
-const flapSound = new Audio("sounds/gawk.mp3");
+const flapSound = new Audio("sounds/gawwk.mp3");
 const hitSound = new Audio("sounds/0919.MP3");
 
 // Wait for assets
@@ -73,7 +73,7 @@ function assetLoaded() {
 // Bird
 const bird = {
   x: 50, y: 200, w: 34, h: 24,
-  frame: 0, velocity: 0, gravity: 0.25, jump: 4.5, alive: false,
+  frame: 0, velocity: 0, gravity: 0.22, jump: 4.2, alive: false,
   draw() { ctx.drawImage(birdFrames[this.frame], this.x, this.y); },
   flap() { 
     this.velocity = -this.jump; 
@@ -98,7 +98,7 @@ const bird = {
 
 // Pipes
 const pipes = [];
-const pipeGap = 90; // original
+const pipeGap = 110; // original
 const pipeWidth = 52;
 
 function spawnPipe() { pipes.push({ x: canvas.width, y: -Math.random() * 100 - 50, scored: false }); }
@@ -107,7 +107,7 @@ function updatePipes() {
   if (!bird.alive) return;
 
   pipes.forEach(p => {
-    p.x -= 2; // original speed
+    p.x -= 1.8; // original speed
 
     // Increase score when bird passes pipe
     if (!p.scored && p.x + pipeWidth < bird.x) {
